@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>English Spelling Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .quiz-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            width: 200px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+            margin: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .feedback {
+            margin-top: 20px;
+            font-size: 16px;
+            text-align: center;
+        }
+        .correct {
+            color: #4CAF50;
+        }
+        .incorrect {
+            color: #f44336;
+        }
+        #wordList {
+            width: 100%;
+            height: 150px;
+            margin-top: 20px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .setup-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .hidden {
+            display: none;
+        }
+        .current-word {
+            font-size: 24px;
+            text-align: center;
+            margin: 20px 0;
+            min-height: 36px;
+        }
+        .score-display {
+            text-align: center;
+            font-size: 18px;
+            margin: 20px 0;
+        }
+        .voice-controls {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .speech-settings {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <button id="showSetup" onclick="toggleSetup()" class="hidden">Show Word List Editor</button>
+
+    <div id="setupSection" class="setup-section">
+        <h3>Enter Your English Word List</h3>
+        <p>Enter one word per line</p>
+        <textarea id="wordList" placeholder="Enter English words (one per line)"></textarea>
+        <button onclick="updateWordList()">Start Quiz</button>
+    </div>
+
+    <div class="quiz-container">
+        <div class="voice-controls">
+            <h4 style="margin-top: 0;">Voice Settings</h4>
+            <div class="speech-settings">
+                <div class="setting-group">
+                    <label for="voiceSelect">Voice:</label>
+                    <select id="voiceSelect" onchange="updateVoice()"></select>
+                </div>
+                <div class="setting-group">
+                    <label for="speedSelect">Speed:</label>
+                    <select id="speedSelect" onchange="updateSpeed()">
+                        <option value="0.6">Very Slow</option>
+                        <option value="0.8" selected>Slow</option>
+                        <option value="1.0">Normal</option>
+                        <option value="1.2">Fast</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="testVoice()">Test Current Voice</button>
+        </div>
+
+        <div class="current-word" id="currentWord"></div>
+        <div class="controls">
+            <button onclick="speakWord()" id="speakButton">🔊 Hear Word</button>
+            <button onclick="repeatWord()">🔄 Repeat 3 Times</button>
+            <input type="text" id="userInput" placeholder="Type what you hear..." onkeypress="checkEnter(event)">
+            <button onclick="checkSpelling()">Check Answer</button>
+            <button onclick="nextWord()">Next Word</button>
+            <button onclick="showAnswer()">Show Answer</button>
+        </div>
+        <div class="score-display">
+            Score: <span id="score">0</span> / <span id="total">0</span>
+        </div>
+        <div id="feedback" class="feedback"></div>
+    </div>
+
+    <script>
+        let words = [];
+        let currentWord = '';
+        let score = 0;
+        let total = 0;
+        let remainingWords = [];
+        let selectedVoice = null;
+
+        // Initialize voice selection
+        function loadVoices() {
+            const voiceSelect = document.getElementById('voiceSelect');
+            voiceSelect.innerHTML = '';
+            
+            const voices = speechSynthesis.getVoices();
+            const englishVoices = voices.filter(voice => voice.lang.includes('en'));
+            const chineseVoices = voices.filter(voice => voice.lang.includes('zh-TW'));
+            
+            // Add English voices
+            englishVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                voiceSelect.appendChild(option);
+            });
+
+            // Add Mandarin Chinese voices
+            chineseVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                voiceSelect.appendChild(option);
+            });
+
+            // Try to select a Mandarin Chinese voice by default
+            const chineseVoice = chineseVoices.find(voice => voice.lang === 'zh-TW');
+            if (chineseVoice) {
+                voiceSelect.value = chineseVoice.name;
+            } else {
+                // If no Mandarin voice, default to an English voice
+                const usVoice = englishVoices.find(voice => voice.lang === 'en-US');
+                if (usVoice) {
+                    voiceSelect.value = usVoice.name;
+                }
+            }
+            updateVoice();
+        }
+
+        // Wait for voices to be loaded
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function updateVoice() {
+            const voices = speechSynthesis.getVoices();
+            const selectedName = document.getElementById('voiceSelect').value;
+            selectedVoice = voices.find(voice => voice.name === selectedName);
+        }
+
+        function updateSpeed() {
+            // Speed is updated when speaking
+        }
+
+        function testVoice() {
+            const utterance = new SpeechSynthesisUtterance("This is a test of the selected voice.");
+            utterance.voice = selectedVoice;
+            utterance.rate = parseFloat(document.getElementById('speedSelect').value);
+            utterance.volume = 1;
+            speechSynthesis.speak(utterance);
+        }
+
+        function speakWord(repeat = 1) {
+            if ('speechSynthesis' in window && currentWord) {
+                window.speechSynthesis.cancel(); // Cancel any ongoing speech
+                
+                for (let i = 0; i < repeat; i++) {
+                    const utterance = new SpeechSynthesisUtterance(currentWord);
+                    utterance.voice = selectedVoice;
+                    utterance.rate = parseFloat(document.getElementById('speedSelect').value);
+                    utterance.volume = 1;
+                    
+                    setTimeout(() => {
+                        window.speechSynthesis.speak(utterance);
+                    }, i * 1500);
+                }
+            }
+        }
+
+        function repeatWord() {
+            speakWord(3);
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function toggleSetup() {
+            const setupSection = document.getElementById('setupSection');
+            const showSetupButton = document.getElementById('showSetup');
+            if (setupSection.classList.contains('hidden')) {
+                setupSection.classList.remove('hidden');
+                showSetupButton.textContent = 'Hide Word List Editor';
+            } else {
+                setupSection.classList.add('hidden');
+                showSetupButton.textContent = 'Show Word List Editor';
+            }
+        }
+
+        function updateWordList() {
+            const input = document.getElementById('wordList').value;
+            const newWords = input.split('\n')
+                .map(word => word.trim())
+                .filter(word => word.length > 0);
+            
+            if (newWords.length > 0) {
+                words = newWords;
+                remainingWords = [...words];
+                shuffleArray(remainingWords);
+                score = 0;
+                total = 0;
+                updateScore();
+                nextWord();
+                document.getElementById('feedback').innerHTML = 'Word list updated! Quiz started.';
+                document.getElementById('feedback').className = 'feedback correct';
+                
+                document.getElementById('setupSection').classList.add('hidden');
+                document.getElementById('showSetup').classList.remove('hidden');
+            } else {
+                document.getElementById('feedback').innerHTML = 'Please enter at least one word';
+                document.getElementById('feedback').className = 'feedback incorrect';
+            }
+        }
+
+        function checkEnter(event) {
+            if (event.key === 'Enter') {
+                checkSpelling();
+            }
+        }
+
+        function checkSpelling() {
+            const userInput = document.getElementById('userInput').value.trim().toLowerCase();
+            const feedback = document.getElementById('feedback');
+            
+            if (userInput === '') {
+                feedback.innerHTML = 'Please enter a word';
+                feedback.className = 'feedback';
+                return;
+            }
+
+            total++;
+            if (userInput === currentWord.toLowerCase()) {
+                score++;
+                feedback.innerHTML = '✓ Correct!';
+                feedback.className = 'feedback correct';
+            } else {
+                feedback.innerHTML = `✗ Incorrect. The correct spelling is "${currentWord}"`;
+                feedback.className = 'feedback incorrect';
+            }
+            
+            updateScore();
+        }
+
+        function showAnswer() {
+            document.getElementById('currentWord').textContent = currentWord;
+        }
+
+        function nextWord() {
+            if (remainingWords.length === 0) {
+                remainingWords = [...words];
+                shuffleArray(remainingWords);
+            }
+            
+            currentWord = remainingWords.pop();
+            document.getElementById('currentWord').textContent = '';
+            document.getElementById('userInput').value = '';
+            document.getElementById('feedback').innerHTML = '';
+            speakWord();
+        }
+
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('total').textContent = total;
+        }
+
+        // Initialize with example words
+        document.getElementById('wordList').value = 'example\nspelling\nquiz\nword\ntest';
+    </script>
+</body>
+</html>
