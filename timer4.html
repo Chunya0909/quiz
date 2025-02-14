@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Countdown Timer</title>
+  <style>
+    /* 全螢幕與置中顯示 */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    /* 倒數計時數字的樣式，使用大字體並設為黃色 */
+    #timer {
+      font-size: 28vw;
+      color: yellow;
+      text-align: center;
+    }
+    /* 控制項的樣式 */
+    #controls {
+      margin-top: 15px;
+    }
+    input {
+      font-size: 1.5rem;
+      padding: 10px;
+      margin: 5px;
+      width: 100px;
+    }
+    button {
+      font-size: 1.5rem;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="timer">00:00</div>
+  <div id="controls">
+    <input type="number" id="minutes" placeholder="Minutes" min="0" />
+    <input type="number" id="seconds" placeholder="Seconds" min="0" max="59" />
+    <button id="start">Start Timer</button>
+    <button id="stop">Stop Timer</button>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      let timerInterval;
+      let remainingSeconds = 0;
+      let lastAnnounced = null;
+  
+      // 更新倒數計時顯示
+      function updateTimerDisplay() {
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        const formattedTime =
+          (minutes < 10 ? '0' + minutes : minutes) +
+          ':' +
+          (seconds < 10 ? '0' + seconds : seconds);
+        document.getElementById('timer').textContent = formattedTime;
+      }
+  
+      // 利用 Web Audio API 播放短促的鬧鐘聲
+      function playBeep() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime);
+        oscillator.connect(audioCtx.destination);
+        oscillator.start();
+        setTimeout(() => {
+          oscillator.stop();
+          audioCtx.close();
+        }, 300); // 300 毫秒的蜂鳴聲
+      }
+  
+      // 開始倒數計時
+      function startTimer() {
+        // 停止先前的計時器
+        if (timerInterval) clearInterval(timerInterval);
+  
+        const minutesInput = document.getElementById('minutes').value;
+        const secondsInput = document.getElementById('seconds').value;
+        const minutes = parseInt(minutesInput, 10) || 0;
+        const seconds = parseInt(secondsInput, 10) || 0;
+        remainingSeconds = minutes * 60 + seconds;
+  
+        // 如果未設定有效的時間，提醒使用者
+        if (remainingSeconds <= 0) {
+          alert('請輸入大於 0 的時間');
+          return;
+        }
+  
+        lastAnnounced = null;
+        updateTimerDisplay();
+  
+        timerInterval = setInterval(() => {
+          if (remainingSeconds <= 0) {
+            clearInterval(timerInterval);
+            document.getElementById('timer').textContent = "Time's Up!";
+            playBeep();
+          } else {
+            remainingSeconds--;
+            updateTimerDisplay();
+  
+            // 剩餘五秒時進行語音播報，並將速率調快
+            if (remainingSeconds <= 5 && remainingSeconds > 0 && remainingSeconds !== lastAnnounced) {
+              lastAnnounced = remainingSeconds;
+              const utterance = new SpeechSynthesisUtterance(remainingSeconds.toString());
+              utterance.rate = 2.0;  // 調快語音播報速度
+              window.speechSynthesis.speak(utterance);
+            }
+          }
+        }, 1000);
+      }
+  
+      // 停止倒數計時並重設顯示
+      function stopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        remainingSeconds = 0;
+        updateTimerDisplay();
+      }
+  
+      document.getElementById('start').addEventListener('click', startTimer);
+      document.getElementById('stop').addEventListener('click', stopTimer);
+    });
+  </script>
+</body>
+</html>
